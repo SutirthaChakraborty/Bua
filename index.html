@@ -112,6 +112,13 @@
       addBengaliSegment(transcript);
     };
 
+    // Restart recognition if still listening
+    bengaliRecognition.onend = () => {
+      if (bengaliListening) {
+        bengaliRecognition.start();
+      }
+    };
+
     bengaliRecognition.onerror = (event) => {
       console.error("Bengali recognition error:", event.error);
     };
@@ -167,6 +174,13 @@
       const transcript = event.results[last][0].transcript.trim();
       // Translate the Hindi transcript to Bengali
       translateHindiToBengali(transcript);
+    };
+
+    // Restart recognition if still listening
+    hindiRecognition.onend = () => {
+      if (hindiListening) {
+        hindiRecognition.start();
+      }
     };
 
     hindiRecognition.onerror = (event) => {
