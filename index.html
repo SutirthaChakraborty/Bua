@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Audio to Bengali Translation</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7fc;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            width: 500px;
+            text-align: center;
+        }
+        #translatedText {
+            margin-top: 20px;
+            font-size: 20px;
+            color: #0066cc;
+            min-height: 40px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #0066cc;
+            color: white;
+        }
+        button:active {
+            background-color: #004c99;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Real-time Audio to Bengali Translation</h2>
+    <button id="toggleListening">Start Listening</button>
+    <div id="translatedText"></div>
+</div>
+
+<script>
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    let isListening = false;
+
+    document.getElementById('toggleListening').onclick = () => {
+        if (!isListening) {
+            recognition.start();
+            isListening = true;
+            document.getElementById('toggleListening').innerText = 'Stop Listening';
+        } else {
+            recognition.stop();
+            isListening = false;
+            document.getElementById('toggleListening').innerText = 'Start Listening';
+        }
+    };
+
+    recognition.onresult = (event) => {
+        const last = event.results.length - 1;
+        const text = event.results[last][0].transcript;
+
+        translateText(text);
+    };
+
+    function translateText(text) {
+        axios.get('https://translate.googleapis.com/translate_a/single', {
+            params: {
+                client: 'gtx',
+                sl: 'en',
+                tl: 'bn',
+                dt: 't',
+                q: text
+            }
+        }).then(response => {
+            const translated = response.data[0][0][0];
+            document.getElementById('translatedText').innerText = translated;
+        }).catch(error => {
+            document.getElementById('translatedText').innerText = 'Translation error!';
+            console.error(error);
+        });
+    }
+
+    recognition.onerror = (event) => {
+        console.error('Recognition error:', event.error);
+        document.getElementById('translatedText').innerText = 'Recognition error: ' + event.error;
+    };
+</script>
+
+</body>
+</html>
