@@ -1,11 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="bn">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Audio to Bengali Translation</title>
-  <!-- Axios is used to call the translation API -->
-  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <title>বাংলা শব্দ স্বীকৃতি</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -21,26 +19,27 @@
       background: #fff;
       padding: 20px;
       border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
       width: 90%;
       max-width: 600px;
       text-align: center;
     }
     h2 {
       margin-top: 0;
+      font-size: 32px;
     }
-    #translatedText {
+    #recognizedText {
       margin-top: 20px;
       text-align: left;
-      font-size: 28px;
+      font-size: 36px;
       line-height: 1.4;
       word-wrap: break-word;
       max-height: 60vh;
       overflow-y: auto;
     }
     button {
-      padding: 12px 24px;
-      font-size: 18px;
+      padding: 16px 32px;
+      font-size: 24px;
       background: #007BFF;
       color: #fff;
       border: none;
@@ -57,95 +56,67 @@
 </head>
 <body>
   <div class="container">
-    <h2>Audio to Bengali Translation</h2>
-    <button id="toggleListening">Start Listening</button>
-    <div id="translatedText"></div>
+    <h2>বাংলা শব্দ স্বীকৃতি</h2>
+    <button id="toggleListening">শুরু করুন</button>
+    <div id="recognizedText"></div>
   </div>
 
   <script>
-    // Ensure browser support for the Speech Recognition API
+    // Check for Speech Recognition support
     window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!window.SpeechRecognition) {
-      alert("Your browser does not support Speech Recognition. Please use Chrome or a supported browser.");
+      alert("আপনার ব্রাউজারটি Speech Recognition সমর্থন করে না। দয়া করে Chrome বা অন্য সমর্থিত ব্রাউজার ব্যবহার করুন।");
     }
 
-    // Set up the Speech Recognition
     const recognition = new window.SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = false;
-    // Set language to English; the translation API auto-detects the input language
-    recognition.lang = 'en-US';
+    // Set the recognition language to Bengali (Bangladesh)
+    recognition.lang = 'bn-BD';
 
     let isListening = false;
-    // Variables to manage segment grouping (using a 5-second pause threshold)
+    // Variables to manage grouping of recognized text segments
     let lastSegmentTime = 0;
     let lastParagraph = null;
-    const pauseThreshold = 5000; // 5 seconds
+    const pauseThreshold = 5000; // 5 seconds pause threshold
 
-    // Toggle start/stop listening on button click
     document.getElementById('toggleListening').addEventListener('click', () => {
       if (!isListening) {
         recognition.start();
         isListening = true;
-        document.getElementById('toggleListening').innerText = 'Stop Listening';
+        document.getElementById('toggleListening').innerText = 'বন্ধ করুন';
       } else {
         recognition.stop();
         isListening = false;
-        document.getElementById('toggleListening').innerText = 'Start Listening';
+        document.getElementById('toggleListening').innerText = 'শুরু করুন';
       }
     });
 
-    // When speech is recognized, process the final transcript
     recognition.onresult = (event) => {
       const last = event.results.length - 1;
       const transcript = event.results[last][0].transcript.trim();
-      // Translate the recognized text into Bengali
-      translateText(transcript);
+      addSegment(transcript);
     };
 
     recognition.onerror = (event) => {
       console.error("Speech recognition error:", event.error);
     };
 
-    // Uses the Google Translate API (unofficial endpoint) to convert text to Bengali.
-    // The 'sl' parameter is set to 'auto' so that it auto-detects the source language.
-    function translateText(text) {
-      axios.get('https://translate.googleapis.com/translate_a/single', {
-        params: {
-          client: 'gtx',
-          sl: 'auto',
-          tl: 'bn',
-          dt: 't',
-          q: text
-        }
-      }).then(response => {
-        if (response.data && response.data[0] && response.data[0][0]) {
-          const translated = response.data[0][0][0];
-          addSegment(translated);
-        }
-      }).catch(error => {
-        console.error("Translation error:", error);
-      });
-    }
-
-    // Appends the translated text into the display area.
-    // If the gap between segments is less than the pause threshold, they are combined;
-    // otherwise, a new paragraph is started.
-    // Each segment is removed automatically after 1 minute.
-    function addSegment(translatedText) {
+    // Append recognized text to the display area.
+    // If the pause between segments is short, combine them in the same paragraph.
+    // Otherwise, start a new paragraph. Each paragraph is removed after 1 minute.
+    function addSegment(text) {
       const now = Date.now();
-      const container = document.getElementById('translatedText');
+      const container = document.getElementById('recognizedText');
 
       if (lastParagraph && (now - lastSegmentTime < pauseThreshold)) {
-        // Append to the existing paragraph
-        lastParagraph.innerText += " " + translatedText;
+        lastParagraph.innerText += " " + text;
       } else {
-        // Create a new paragraph for this segment
         lastParagraph = document.createElement("p");
         lastParagraph.className = "segment";
-        lastParagraph.innerText = translatedText;
+        lastParagraph.innerText = text;
         container.appendChild(lastParagraph);
-        // Remove this paragraph after 1 minute (60000 ms)
+        // Remove the paragraph after 1 minute (60000 ms)
         setTimeout(() => {
           if (lastParagraph.parentNode === container) {
             container.removeChild(lastParagraph);
@@ -153,7 +124,6 @@
         }, 60000);
       }
       lastSegmentTime = now;
-      // Auto-scroll to ensure the latest text is visible
       container.scrollTop = container.scrollHeight;
     }
   </script>
