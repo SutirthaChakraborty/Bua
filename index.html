@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>বহুভাষা থেকে বাংলা</title>
-  <!-- Axios for making translation API calls -->
+  <title>বাংলা, হিন্দি ও ইংরেজি থেকে বাংলা</title>
+  <!-- Axios for translation requests -->
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <style>
     body {
@@ -14,24 +14,22 @@
       padding: 10px;
       display: flex;
       flex-direction: column;
-      align-items: center;
+      gap: 20px;
+      min-height: 100vh;
     }
-    .container {
-      width: 100%;
-      max-width: 800px;
+    .section {
       background: #fff;
       border-radius: 8px;
       padding: 20px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      flex: 1;
     }
-    h2 {
-      text-align: center;
+    .section h2 {
+      margin: 0 0 10px;
       font-size: 32px;
-      margin: 0 0 20px 0;
+      text-align: center;
     }
-    button {
-      display: block;
-      margin: 0 auto 20px auto;
+    .section button {
       padding: 16px 32px;
       font-size: 24px;
       background: #007BFF;
@@ -39,18 +37,20 @@
       border: none;
       border-radius: 5px;
       cursor: pointer;
+      display: block;
+      margin: 0 auto 20px auto;
     }
-    button:active {
+    .section button:active {
       background: #0056b3;
     }
     .displayArea {
       font-size: 36px;
       line-height: 1.4;
       word-wrap: break-word;
-      max-height: 60vh;
+      max-height: 40vh;
       overflow-y: auto;
-      border: 1px solid #ddd;
       padding: 10px;
+      border: 1px solid #ddd;
       border-radius: 4px;
     }
     p.segment {
@@ -59,58 +59,132 @@
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>বহুভাষা থেকে বাংলা</h2>
-    <button id="toggleListening">শুরু করুন</button>
-    <div class="displayArea" id="output"></div>
+  <!-- Bengali Transcription Section -->
+  <div class="section" id="bengaliSection">
+    <h2>বাংলা ট্রান্সক্রিপশন</h2>
+    <button id="toggleBengali">শুরু করুন</button>
+    <div class="displayArea" id="bengaliText"></div>
+  </div>
+
+  <!-- Hindi-to-Bengali Translation Section -->
+  <div class="section" id="hindiSection">
+    <h2>হিন্দি থেকে বাংলা অনুবাদ</h2>
+    <button id="toggleHindi">শুরু করুন</button>
+    <div class="displayArea" id="hindiText"></div>
+  </div>
+
+  <!-- English-to-Bengali Translation Section -->
+  <div class="section" id="englishSection">
+    <h2>ইংরেজি থেকে বাংলা অনুবাদ</h2>
+    <button id="toggleEnglish">শুরু করুন</button>
+    <div class="displayArea" id="englishText"></div>
   </div>
 
   <script>
-    // Check for Speech Recognition support
+    // Check for Speech Recognition API support
     window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!window.SpeechRecognition) {
       alert("আপনার ব্রাউজারটি Speech Recognition সমর্থন করে না। Chrome বা অন্য সমর্থিত ব্রাউজার ব্যবহার করুন।");
     }
 
-    // Set up a single SpeechRecognition instance
-    const recognition = new window.SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    // Not setting recognition.lang so that we rely on auto-detection via the translation API
+    const pauseThreshold = 5000; // 5 seconds pause before starting a new segment
 
-    let listening = false;
-    let lastSegmentTime = 0;
-    let lastParagraph = null;
-    const pauseThreshold = 5000; // 5 seconds pause threshold
+    // --------------------------
+    // Bengali Transcription Setup
+    // --------------------------
+    const bengaliRecognition = new window.SpeechRecognition();
+    bengaliRecognition.continuous = true;
+    bengaliRecognition.interimResults = false;
+    bengaliRecognition.lang = 'bn-BD';
 
-    document.getElementById('toggleListening').addEventListener('click', () => {
-      if (!listening) {
-        recognition.start();
-        listening = true;
-        document.getElementById('toggleListening').innerText = 'বন্ধ করুন';
+    let bengaliListening = false;
+    let bengaliLastSegmentTime = 0;
+    let bengaliLastParagraph = null;
+
+    document.getElementById('toggleBengali').addEventListener('click', () => {
+      if (!bengaliListening) {
+        bengaliRecognition.start();
+        bengaliListening = true;
+        document.getElementById('toggleBengali').innerText = 'বন্ধ করুন';
       } else {
-        recognition.stop();
-        listening = false;
-        document.getElementById('toggleListening').innerText = 'শুরু করুন';
+        bengaliRecognition.stop();
+        bengaliListening = false;
+        document.getElementById('toggleBengali').innerText = 'শুরু করুন';
       }
     });
 
-    recognition.onresult = (event) => {
+    bengaliRecognition.onresult = (event) => {
       const last = event.results.length - 1;
       const transcript = event.results[last][0].transcript.trim();
-      // Translate any detected language to Bengali (sl=auto auto-detects source)
-      translateToBengali(transcript);
+      addBengaliSegment(transcript);
     };
 
-    recognition.onerror = (event) => {
-      console.error("Speech recognition error:", event.error);
+    bengaliRecognition.onerror = (event) => {
+      console.error("Bengali recognition error:", event.error);
     };
 
-    function translateToBengali(text) {
+    function addBengaliSegment(text) {
+      const now = Date.now();
+      const container = document.getElementById('bengaliText');
+
+      if (bengaliLastParagraph && (now - bengaliLastSegmentTime < pauseThreshold)) {
+        bengaliLastParagraph.innerText += " " + text;
+      } else {
+        bengaliLastParagraph = document.createElement("p");
+        bengaliLastParagraph.className = "segment";
+        bengaliLastParagraph.innerText = text;
+        container.appendChild(bengaliLastParagraph);
+        // Remove the segment after 1 minute
+        setTimeout(() => {
+          if (bengaliLastParagraph.parentNode === container) {
+            container.removeChild(bengaliLastParagraph);
+          }
+        }, 60000);
+      }
+      bengaliLastSegmentTime = now;
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // --------------------------
+    // Hindi-to-Bengali Translation Setup
+    // --------------------------
+    const hindiRecognition = new window.SpeechRecognition();
+    hindiRecognition.continuous = true;
+    hindiRecognition.interimResults = false;
+    hindiRecognition.lang = 'hi-IN';
+
+    let hindiListening = false;
+    let hindiLastSegmentTime = 0;
+    let hindiLastParagraph = null;
+
+    document.getElementById('toggleHindi').addEventListener('click', () => {
+      if (!hindiListening) {
+        hindiRecognition.start();
+        hindiListening = true;
+        document.getElementById('toggleHindi').innerText = 'বন্ধ করুন';
+      } else {
+        hindiRecognition.stop();
+        hindiListening = false;
+        document.getElementById('toggleHindi').innerText = 'শুরু করুন';
+      }
+    });
+
+    hindiRecognition.onresult = (event) => {
+      const last = event.results.length - 1;
+      const transcript = event.results[last][0].transcript.trim();
+      // Translate the Hindi transcript to Bengali
+      translateHindiToBengali(transcript);
+    };
+
+    hindiRecognition.onerror = (event) => {
+      console.error("Hindi recognition error:", event.error);
+    };
+
+    function translateHindiToBengali(text) {
       axios.get('https://translate.googleapis.com/translate_a/single', {
         params: {
           client: 'gtx',
-          sl: 'auto',
+          sl: 'hi',
           tl: 'bn',
           dt: 't',
           q: text
@@ -119,7 +193,7 @@
       .then(response => {
         if (response.data && response.data[0] && response.data[0][0]) {
           const translated = response.data[0][0][0];
-          addSegment(translated);
+          addHindiSegment(translated);
         }
       })
       .catch(error => {
@@ -127,25 +201,103 @@
       });
     }
 
-    // Add the translated segment to the display area, grouping segments with short pauses.
-    function addSegment(text) {
+    function addHindiSegment(text) {
       const now = Date.now();
-      const container = document.getElementById('output');
-      if (lastParagraph && (now - lastSegmentTime < pauseThreshold)) {
-        lastParagraph.innerText += " " + text;
+      const container = document.getElementById('hindiText');
+
+      if (hindiLastParagraph && (now - hindiLastSegmentTime < pauseThreshold)) {
+        hindiLastParagraph.innerText += " " + text;
       } else {
-        lastParagraph = document.createElement("p");
-        lastParagraph.className = "segment";
-        lastParagraph.innerText = text;
-        container.appendChild(lastParagraph);
-        // Automatically remove the segment after 1 minute (60000 ms)
+        hindiLastParagraph = document.createElement("p");
+        hindiLastParagraph.className = "segment";
+        hindiLastParagraph.innerText = text;
+        container.appendChild(hindiLastParagraph);
+        // Remove this segment after 1 minute
         setTimeout(() => {
-          if (lastParagraph.parentNode === container) {
-            container.removeChild(lastParagraph);
+          if (hindiLastParagraph.parentNode === container) {
+            container.removeChild(hindiLastParagraph);
           }
         }, 60000);
       }
-      lastSegmentTime = now;
+      hindiLastSegmentTime = now;
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // --------------------------
+    // English-to-Bengali Translation Setup
+    // --------------------------
+    const englishRecognition = new window.SpeechRecognition();
+    englishRecognition.continuous = true;
+    englishRecognition.interimResults = false;
+    englishRecognition.lang = 'en-US';
+
+    let englishListening = false;
+    let englishLastSegmentTime = 0;
+    let englishLastParagraph = null;
+
+    document.getElementById('toggleEnglish').addEventListener('click', () => {
+      if (!englishListening) {
+        englishRecognition.start();
+        englishListening = true;
+        document.getElementById('toggleEnglish').innerText = 'বন্ধ করুন';
+      } else {
+        englishRecognition.stop();
+        englishListening = false;
+        document.getElementById('toggleEnglish').innerText = 'শুরু করুন';
+      }
+    });
+
+    englishRecognition.onresult = (event) => {
+      const last = event.results.length - 1;
+      const transcript = event.results[last][0].transcript.trim();
+      // Translate the English transcript to Bengali
+      translateEnglishToBengali(transcript);
+    };
+
+    englishRecognition.onerror = (event) => {
+      console.error("English recognition error:", event.error);
+    };
+
+    function translateEnglishToBengali(text) {
+      axios.get('https://translate.googleapis.com/translate_a/single', {
+        params: {
+          client: 'gtx',
+          sl: 'en',
+          tl: 'bn',
+          dt: 't',
+          q: text
+        }
+      })
+      .then(response => {
+        if (response.data && response.data[0] && response.data[0][0]) {
+          const translated = response.data[0][0][0];
+          addEnglishSegment(translated);
+        }
+      })
+      .catch(error => {
+        console.error("Translation error:", error);
+      });
+    }
+
+    function addEnglishSegment(text) {
+      const now = Date.now();
+      const container = document.getElementById('englishText');
+
+      if (englishLastParagraph && (now - englishLastSegmentTime < pauseThreshold)) {
+        englishLastParagraph.innerText += " " + text;
+      } else {
+        englishLastParagraph = document.createElement("p");
+        englishLastParagraph.className = "segment";
+        englishLastParagraph.innerText = text;
+        container.appendChild(englishLastParagraph);
+        // Remove this segment after 1 minute
+        setTimeout(() => {
+          if (englishLastParagraph.parentNode === container) {
+            container.removeChild(englishLastParagraph);
+          }
+        }, 60000);
+      }
+      englishLastSegmentTime = now;
       container.scrollTop = container.scrollHeight;
     }
   </script>
