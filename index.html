@@ -1,107 +1,161 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-time Audio to Bengali Translation</title>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f7fc;
-            color: #333;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-        .container {
-            background: #ffffff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            width: 500px;
-            text-align: center;
-        }
-        #translatedText {
-            margin-top: 20px;
-            font-size: 20px;
-            color: #0066cc;
-            min-height: 40px;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            border: none;
-            border-radius: 4px;
-            background-color: #0066cc;
-            color: white;
-        }
-        button:active {
-            background-color: #004c99;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio to Bengali Translation</title>
+  <!-- Axios is used to call the translation API -->
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      width: 90%;
+      max-width: 600px;
+      text-align: center;
+    }
+    h2 {
+      margin-top: 0;
+    }
+    #translatedText {
+      margin-top: 20px;
+      text-align: left;
+      font-size: 28px;
+      line-height: 1.4;
+      word-wrap: break-word;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+    button {
+      padding: 12px 24px;
+      font-size: 18px;
+      background: #007BFF;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:active {
+      background: #0056b3;
+    }
+    p.segment {
+      margin: 10px 0;
+    }
+  </style>
 </head>
 <body>
-
-<div class="container">
-    <h2>Real-time Audio to Bengali Translation</h2>
+  <div class="container">
+    <h2>Audio to Bengali Translation</h2>
     <button id="toggleListening">Start Listening</button>
     <div id="translatedText"></div>
-</div>
+  </div>
 
-<script>
-    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+  <script>
+    // Ensure browser support for the Speech Recognition API
+    window.SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!window.SpeechRecognition) {
+      alert("Your browser does not support Speech Recognition. Please use Chrome or a supported browser.");
+    }
+
+    // Set up the Speech Recognition
+    const recognition = new window.SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = false;
+    // Set language to English; the translation API auto-detects the input language
     recognition.lang = 'en-US';
 
     let isListening = false;
+    // Variables to manage segment grouping (using a 5-second pause threshold)
+    let lastSegmentTime = 0;
+    let lastParagraph = null;
+    const pauseThreshold = 5000; // 5 seconds
 
-    document.getElementById('toggleListening').onclick = () => {
-        if (!isListening) {
-            recognition.start();
-            isListening = true;
-            document.getElementById('toggleListening').innerText = 'Stop Listening';
-        } else {
-            recognition.stop();
-            isListening = false;
-            document.getElementById('toggleListening').innerText = 'Start Listening';
-        }
-    };
+    // Toggle start/stop listening on button click
+    document.getElementById('toggleListening').addEventListener('click', () => {
+      if (!isListening) {
+        recognition.start();
+        isListening = true;
+        document.getElementById('toggleListening').innerText = 'Stop Listening';
+      } else {
+        recognition.stop();
+        isListening = false;
+        document.getElementById('toggleListening').innerText = 'Start Listening';
+      }
+    });
 
+    // When speech is recognized, process the final transcript
     recognition.onresult = (event) => {
-        const last = event.results.length - 1;
-        const text = event.results[last][0].transcript;
-
-        translateText(text);
+      const last = event.results.length - 1;
+      const transcript = event.results[last][0].transcript.trim();
+      // Translate the recognized text into Bengali
+      translateText(transcript);
     };
-
-    function translateText(text) {
-        axios.get('https://translate.googleapis.com/translate_a/single', {
-            params: {
-                client: 'gtx',
-                sl: 'en',
-                tl: 'bn',
-                dt: 't',
-                q: text
-            }
-        }).then(response => {
-            const translated = response.data[0][0][0];
-            document.getElementById('translatedText').innerText = translated;
-        }).catch(error => {
-            document.getElementById('translatedText').innerText = 'Translation error!';
-            console.error(error);
-        });
-    }
 
     recognition.onerror = (event) => {
-        console.error('Recognition error:', event.error);
-        document.getElementById('translatedText').innerText = 'Recognition error: ' + event.error;
+      console.error("Speech recognition error:", event.error);
     };
-</script>
 
+    // Uses the Google Translate API (unofficial endpoint) to convert text to Bengali.
+    // The 'sl' parameter is set to 'auto' so that it auto-detects the source language.
+    function translateText(text) {
+      axios.get('https://translate.googleapis.com/translate_a/single', {
+        params: {
+          client: 'gtx',
+          sl: 'auto',
+          tl: 'bn',
+          dt: 't',
+          q: text
+        }
+      }).then(response => {
+        if (response.data && response.data[0] && response.data[0][0]) {
+          const translated = response.data[0][0][0];
+          addSegment(translated);
+        }
+      }).catch(error => {
+        console.error("Translation error:", error);
+      });
+    }
+
+    // Appends the translated text into the display area.
+    // If the gap between segments is less than the pause threshold, they are combined;
+    // otherwise, a new paragraph is started.
+    // Each segment is removed automatically after 1 minute.
+    function addSegment(translatedText) {
+      const now = Date.now();
+      const container = document.getElementById('translatedText');
+
+      if (lastParagraph && (now - lastSegmentTime < pauseThreshold)) {
+        // Append to the existing paragraph
+        lastParagraph.innerText += " " + translatedText;
+      } else {
+        // Create a new paragraph for this segment
+        lastParagraph = document.createElement("p");
+        lastParagraph.className = "segment";
+        lastParagraph.innerText = translatedText;
+        container.appendChild(lastParagraph);
+        // Remove this paragraph after 1 minute (60000 ms)
+        setTimeout(() => {
+          if (lastParagraph.parentNode === container) {
+            container.removeChild(lastParagraph);
+          }
+        }, 60000);
+      }
+      lastSegmentTime = now;
+      // Auto-scroll to ensure the latest text is visible
+      container.scrollTop = container.scrollHeight;
+    }
+  </script>
 </body>
 </html>
