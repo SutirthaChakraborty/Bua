@@ -20,6 +20,7 @@
       --button-text: #fff;
       --error-color: #dc3545;
       --success-color: #28a745;
+      --warning-color: #ffc107;
     }
 
     * {
@@ -93,6 +94,11 @@
       background-color: var(--error-color);
     }
 
+    .button-restart {
+      background-color: var(--warning-color);
+      color: #333;
+    }
+
     .displayArea {
       font-size: 20px;
       line-height: 1.4;
@@ -113,31 +119,76 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-top: 5px;
-      height: 20px;
+      margin-top: 10px;
+      padding: 5px 10px;
+      height: 30px;
       font-size: 14px;
+      border-radius: 15px;
+      background-color: rgba(0,0,0,0.05);
     }
 
     .status-indicator .dot {
       display: inline-block;
-      width: 10px;
-      height: 10px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
-      margin-right: 5px;
+      margin-right: 8px;
     }
 
     .status-indicator .active {
       background-color: var(--success-color);
+      animation: pulse 2s infinite;
     }
 
     .status-indicator .inactive {
       background-color: var(--error-color);
     }
 
+    .status-indicator .warning {
+      background-color: var(--warning-color);
+    }
+
+    @keyframes pulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+      }
+      70% {
+        box-shadow: 0 0 0 6px rgba(40, 167, 69, 0);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+      }
+    }
+
     .feature-unavailable {
       padding: 20px;
       text-align: center;
       color: var(--error-color);
+    }
+
+    .heartbeat-monitor {
+      height: 4px;
+      width: 100%;
+      background-color: #f1f1f1;
+      position: relative;
+      margin-top: 5px;
+      overflow: hidden;
+      border-radius: 2px;
+    }
+
+    .heartbeat-monitor .pulse {
+      position: absolute;
+      height: 100%;
+      left: 0;
+      background-color: var(--success-color);
+      animation: heartbeat 1.5s ease-in-out infinite;
+      opacity: 0.7;
+    }
+
+    @keyframes heartbeat {
+      0% { width: 0%; }
+      50% { width: 100%; }
+      100% { width: 0%; }
     }
 
     /* Media queries for better responsiveness */
@@ -180,12 +231,16 @@
     <h2>বাংলা</h2>
     <div class="button-container">
       <button id="toggleBengali" class="button">শুরু করুন</button>
+      <button id="restartBengali" class="button button-restart">পুনরায় শুরু</button>
       <button id="clearBengali" class="button button-warning">পরিষ্কার</button>
     </div>
     <div class="displayArea" id="bengaliText"></div>
     <div class="status-indicator">
       <span class="dot inactive" id="bengaliStatus"></span>
       <span id="bengaliStatusText">শোনার জন্য প্রস্তুত</span>
+    </div>
+    <div class="heartbeat-monitor" id="bengaliHeartbeat" style="display: none;">
+      <div class="pulse"></div>
     </div>
   </div>
 
@@ -194,12 +249,16 @@
     <h2>হিন্দি থেকে বাংলা</h2>
     <div class="button-container">
       <button id="toggleHindi" class="button">শুরু করুন</button>
+      <button id="restartHindi" class="button button-restart">পুনরায় শুরু</button>
       <button id="clearHindi" class="button button-warning">পরিষ্কার</button>
     </div>
     <div class="displayArea" id="hindiText"></div>
     <div class="status-indicator">
       <span class="dot inactive" id="hindiStatus"></span>
       <span id="hindiStatusText">শোনার জন্য প্রস্তুত</span>
+    </div>
+    <div class="heartbeat-monitor" id="hindiHeartbeat" style="display: none;">
+      <div class="pulse"></div>
     </div>
   </div>
 
@@ -216,25 +275,32 @@
       
       // Handling for iOS Safari which may have partial support
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      const isAndroid = /Android/.test(navigator.userAgent);
       
       // Initialize UI elements
       const bengaliSection = document.getElementById('bengaliSection');
       const bengaliToggle = document.getElementById('toggleBengali');
+      const bengaliRestart = document.getElementById('restartBengali');
       const bengaliClear = document.getElementById('clearBengali');
       const bengaliText = document.getElementById('bengaliText');
       const bengaliStatus = document.getElementById('bengaliStatus');
       const bengaliStatusText = document.getElementById('bengaliStatusText');
+      const bengaliHeartbeat = document.getElementById('bengaliHeartbeat');
       
       const hindiSection = document.getElementById('hindiSection');
       const hindiToggle = document.getElementById('toggleHindi');
+      const hindiRestart = document.getElementById('restartHindi');
       const hindiClear = document.getElementById('clearHindi');
       const hindiText = document.getElementById('hindiText');
       const hindiStatus = document.getElementById('hindiStatus');
       const hindiStatusText = document.getElementById('hindiStatusText');
+      const hindiHeartbeat = document.getElementById('hindiHeartbeat');
 
       // Configuration
       const pauseThreshold = 5000; // 5 seconds pause before starting a new segment
-      const segmentRemovalTime = 60000; // 1 minute
+      const segmentRemovalTime = 300000; // 5 minutes (increased from 1 minute)
+      const healthCheckInterval = 3000; // Check every 3 seconds if recognition is still running
+      const maxRestartAttempts = 5; // Max number of automatic restart attempts before requiring manual intervention
 
       let bengaliRecognition = null;
       let hindiRecognition = null;
@@ -244,22 +310,73 @@
       let hindiLastSegmentTime = 0;
       let bengaliLastParagraph = null;
       let hindiLastParagraph = null;
+      let bengaliRestartAttempts = 0;
+      let hindiRestartAttempts = 0;
+      let bengaliHealthCheckTimer = null;
+      let hindiHealthCheckTimer = null;
+      let bengaliLastResultTime = 0;
+      let hindiLastResultTime = 0;
+
+      // Continuously check if recognition is still working
+      function setupBengaliHealthCheck() {
+        if (bengaliHealthCheckTimer) {
+          clearInterval(bengaliHealthCheckTimer);
+        }
+        
+        bengaliHealthCheckTimer = setInterval(() => {
+          const now = Date.now();
+          // If we're supposed to be listening but haven't received results in a while
+          if (bengaliListening && now - bengaliLastResultTime > 20000) {
+            // This suggests recognition might be stuck or not working
+            console.warn("Bengali recognition may be stuck - restarting");
+            restartBengaliRecognition(true);
+          }
+        }, healthCheckInterval);
+      }
+      
+      function setupHindiHealthCheck() {
+        if (hindiHealthCheckTimer) {
+          clearInterval(hindiHealthCheckTimer);
+        }
+        
+        hindiHealthCheckTimer = setInterval(() => {
+          const now = Date.now();
+          // If we're supposed to be listening but haven't received results in a while
+          if (hindiListening && now - hindiLastResultTime > 20000) {
+            // This suggests recognition might be stuck or not working
+            console.warn("Hindi recognition may be stuck - restarting");
+            restartHindiRecognition(true);
+          }
+        }, healthCheckInterval);
+      }
       
       // Setup and configure speech recognition if supported
       if (speechRecognitionSupported) {
         setupBengaliRecognition();
         setupHindiRecognition();
+        
+        // Setup health checks
+        setupBengaliHealthCheck();
+        setupHindiHealthCheck();
       } else {
         handleUnsupportedFeature();
       }
 
-      // Initialize clear buttons
+      // Initialize clear and restart buttons
       bengaliClear.addEventListener('click', () => {
         clearDisplay(bengaliText);
+      });
+      
+      bengaliRestart.addEventListener('click', () => {
+        restartBengaliRecognition(true);
       });
 
       hindiClear.addEventListener('click', () => {
         clearDisplay(hindiText);
+      });
+      
+      hindiRestart.addEventListener('click', () => {
+        restartHindiRecognition(true);
       });
 
       // Helper function to clear a display area
@@ -269,33 +386,137 @@
         }
       }
 
-      // Setup Bengali speech recognition
+      // Function to restart Bengali recognition
+      function restartBengaliRecognition(manualRestart = false) {
+        // If it was manually restarted, reset the counter
+        if (manualRestart) {
+          bengaliRestartAttempts = 0;
+        }
+        
+        if (bengaliRecognition) {
+          try {
+            // Stop current recognition
+            bengaliRecognition.abort();
+          } catch (e) {
+            console.warn("Could not abort Bengali recognition:", e);
+          }
+          
+          // Create a new recognition instance
+          setupBengaliRecognition();
+          
+          // Start listening again if we were listening before
+          if (bengaliListening || manualRestart) {
+            try {
+              updateStatus(bengaliStatus, bengaliStatusText, 'warning', "পুনরায় শুরু করছে...");
+              bengaliHeartbeat.style.display = 'block';
+              
+              // Use a small delay before restarting to allow cleanup
+              setTimeout(() => {
+                bengaliRecognition.start();
+                bengaliListening = true;
+                bengaliRestartAttempts++;
+                console.log(`Bengali recognition restarted (attempt ${bengaliRestartAttempts})`);
+              }, 500);
+            } catch (e) {
+              console.error("Failed to restart Bengali recognition:", e);
+              updateStatus(bengaliStatus, bengaliStatusText, false, "পুনরায় শুরু করতে ব্যর্থ");
+              bengaliHeartbeat.style.display = 'none';
+              bengaliListening = false;
+              bengaliToggle.innerText = 'শুরু করুন';
+            }
+          }
+        }
+      }
+      
+      // Function to restart Hindi recognition
+      function restartHindiRecognition(manualRestart = false) {
+        // If it was manually restarted, reset the counter
+        if (manualRestart) {
+          hindiRestartAttempts = 0;
+        }
+        
+        if (hindiRecognition) {
+          try {
+            // Stop current recognition
+            hindiRecognition.abort();
+          } catch (e) {
+            console.warn("Could not abort Hindi recognition:", e);
+          }
+          
+          // Create a new recognition instance
+          setupHindiRecognition();
+          
+          // Start listening again if we were listening before
+          if (hindiListening || manualRestart) {
+            try {
+              updateStatus(hindiStatus, hindiStatusText, 'warning', "পুনরায় শুরু করছে...");
+              hindiHeartbeat.style.display = 'block';
+              
+              // Use a small delay before restarting to allow cleanup
+              setTimeout(() => {
+                hindiRecognition.start();
+                hindiListening = true;
+                hindiRestartAttempts++;
+                console.log(`Hindi recognition restarted (attempt ${hindiRestartAttempts})`);
+              }, 500);
+            } catch (e) {
+              console.error("Failed to restart Hindi recognition:", e);
+              updateStatus(hindiStatus, hindiStatusText, false, "পুনরায় শুরু করতে ব্যর্থ");
+              hindiHeartbeat.style.display = 'none';
+              hindiListening = false;
+              hindiToggle.innerText = 'শুরু করুন';
+            }
+          }
+        }
+      }
+
+      // Setup Bengali speech recognition with improved continuous listening
       function setupBengaliRecognition() {
         if (!speechRecognitionSupported) return;
 
         bengaliRecognition = new window.SpeechRecognition();
+        // Critical settings for continuous operation
         bengaliRecognition.continuous = true;
-        bengaliRecognition.interimResults = false;
+        bengaliRecognition.interimResults = true; // Get interim results for more frequent feedback
         bengaliRecognition.lang = 'bn-BD';
         bengaliRecognition.maxAlternatives = 1;
+        
+        // For Android, greedier recognition might help
+        if (isAndroid) {
+          bengaliRecognition.interimResults = true;
+        }
 
         bengaliToggle.addEventListener('click', toggleBengaliRecognition);
         
         bengaliRecognition.onstart = function() {
           bengaliListening = true;
-          updateStatus(bengaliStatus, bengaliStatusText, true, "শুনছে...");
+          bengaliLastResultTime = Date.now(); // Reset timer when starting
+          updateStatus(bengaliStatus, bengaliStatusText, 'active', "শুনছে...");
           bengaliToggle.innerText = 'বন্ধ করুন';
+          bengaliHeartbeat.style.display = 'block';
+          console.log("Bengali recognition started");
         };
 
         bengaliRecognition.onend = function() {
+          console.log("Bengali recognition ended naturally");
+          bengaliHeartbeat.style.display = 'none';
+          
           if (bengaliListening) {
-            // Try to restart if auto-stopped and still in listening mode
-            try {
-              bengaliRecognition.start();
-            } catch (e) {
-              console.error("Could not restart Bengali recognition:", e);
+            // If we still want to be listening, try to restart
+            if (bengaliRestartAttempts < maxRestartAttempts) {
+              console.log("Attempting to auto-restart Bengali recognition");
+              try {
+                bengaliRecognition.start();
+                bengaliLastResultTime = Date.now();
+                console.log("Bengali recognition auto-restarted successfully");
+              } catch (e) {
+                console.error("Auto-restart failed, trying full restart:", e);
+                restartBengaliRecognition();
+              }
+            } else {
+              // Too many restart attempts, require manual intervention
+              updateStatus(bengaliStatus, bengaliStatusText, 'warning', "পুনরায় শুরু করতে ক্লিক করুন");
               bengaliListening = false;
-              updateStatus(bengaliStatus, bengaliStatusText, false, "বন্ধ হয়ে গেছে - পুনরায় চেষ্টা করুন");
               bengaliToggle.innerText = 'শুরু করুন';
             }
           } else {
@@ -305,30 +526,86 @@
         };
 
         bengaliRecognition.onresult = function(event) {
+          bengaliLastResultTime = Date.now(); // Update the last result time
+          
           if (!event.results || event.results.length === 0) return;
           
-          const last = event.results.length - 1;
-          const transcript = event.results[last][0].transcript.trim();
-          if (transcript) {
-            addBengaliSegment(transcript);
+          // Get the latest result - for continuous speech recognition
+          const results = event.results;
+          let finalTranscript = '';
+          let interimTranscript = '';
+          
+          // Process all results in this event
+          for (let i = event.resultIndex; i < results.length; i++) {
+            const transcript = results[i][0].transcript.trim();
+            if (results[i].isFinal) {
+              finalTranscript += transcript + ' ';
+            } else {
+              interimTranscript += transcript;
+            }
+          }
+          
+          // Add any final transcript segments to the display
+          if (finalTranscript) {
+            addBengaliSegment(finalTranscript);
+          }
+          
+          // Optionally update an interim display (for a smoother experience)
+          // This could show gray text that gets replaced with final transcripts
+          if (interimTranscript) {
+            // You could show this in a separate element if desired
+            // updateInterimDisplay(interimTranscript);
           }
         };
 
         bengaliRecognition.onerror = function(event) {
           console.error("Bengali recognition error:", event.error);
+          bengaliHeartbeat.style.display = 'none';
           
           // Handle specific errors
-          if (event.error === 'not-allowed') {
+          if (event.error === 'no-speech') {
+            // This is normal, just restart
+            console.log("No speech detected, continuing to listen");
+            // Don't update UI for this common error
+          } else if (event.error === 'audio-capture') {
+            updateStatus(bengaliStatus, bengaliStatusText, 'warning', "মাইক্রোফোন সমস্যা");
+            restartBengaliRecognition();
+          } else if (event.error === 'not-allowed') {
             updateStatus(bengaliStatus, bengaliStatusText, false, "অনুমতি দেওয়া হয়নি - মাইক্রোফোন অ্যাক্সেস দিন");
+            bengaliListening = false;
+            bengaliToggle.innerText = 'শুরু করুন';
           } else if (event.error === 'network') {
-            updateStatus(bengaliStatus, bengaliStatusText, false, "নেটওয়ার্ক সমস্যা - ইন্টারনেট সংযোগ পরীক্ষা করুন");
+            updateStatus(bengaliStatus, bengaliStatusText, 'warning', "নেটওয়ার্ক সমস্যা - পুনরায় চেষ্টা করছে");
+            restartBengaliRecognition();
+          } else if (event.error === 'aborted') {
+            // This is normal during restarts
+            console.log("Recognition aborted, likely during restart");
           } else {
-            updateStatus(bengaliStatus, bengaliStatusText, false, "ত্রুটি হয়েছে - পুনরায় চেষ্টা করুন");
+            updateStatus(bengaliStatus, bengaliStatusText, 'warning', "ত্রুটি হয়েছে - পুনরায় চেষ্টা করছে");
+            restartBengaliRecognition();
           }
-          
-          // Reset state
-          bengaliListening = false;
-          bengaliToggle.innerText = 'শুরু করুন';
+        };
+        
+        // Add audioend handler to detect when audio input has stopped
+        bengaliRecognition.onaudioend = function() {
+          console.log("Bengali audio input ended");
+          // If we're still supposed to be listening, ensure it restarts
+          if (bengaliListening) {
+            // Rather than immediately restarting, mark this time for our health check
+            bengaliLastResultTime = Date.now() - 15000; // Set it 15s ago to trigger health check soon
+          }
+        };
+        
+        // Add nomatch handler
+        bengaliRecognition.onnomatch = function() {
+          console.log("No match found for Bengali speech");
+          // This is normal, just continue listening
+        };
+        
+        // Add a soundstart handler to provide feedback
+        bengaliRecognition.onsoundstart = function() {
+          console.log("Bengali sound detected");
+          // Optionally update UI to show sound is being detected
         };
       }
 
@@ -336,21 +613,40 @@
         if (!bengaliRecognition) return;
 
         if (!bengaliListening) {
+          // Reset restart attempts when manually starting
+          bengaliRestartAttempts = 0;
+          
           try {
             bengaliRecognition.start();
+            updateStatus(bengaliStatus, bengaliStatusText, 'active', "শুরু করছে...");
           } catch (e) {
             console.error("Could not start Bengali recognition:", e);
             alert("স্পিচ রেকগনিশন শুরু করতে সমস্যা হয়েছে। পৃষ্ঠাটি রিফ্রেশ করুন বা অন্য ব্রাউজার ব্যবহার করুন।");
+            updateStatus(bengaliStatus, bengaliStatusText, false, "শুরু করতে ব্যর্থ");
           }
         } else {
-          bengaliRecognition.stop();
-          bengaliListening = false;
+          try {
+            bengaliRecognition.stop();
+            bengaliListening = false;
+            bengaliHeartbeat.style.display = 'none';
+            updateStatus(bengaliStatus, bengaliStatusText, false, "শোনার জন্য প্রস্তুত");
+            bengaliToggle.innerText = 'শুরু করুন';
+          } catch (e) {
+            console.error("Could not stop Bengali recognition:", e);
+            // Try to recover by restarting
+            restartBengaliRecognition(true);
+          }
         }
       }
 
-      // Add detected Bengali speech to display
+      // Add detected Bengali speech to display with improved handling
       function addBengaliSegment(text) {
+        if (!text || text.trim() === '') return;
+        
         const now = Date.now();
+        
+        // Update the activity timestamp
+        bengaliLastResultTime = now;
         
         if (bengaliLastParagraph && (now - bengaliLastSegmentTime < pauseThreshold)) {
           bengaliLastParagraph.innerText += " " + text;
@@ -360,7 +656,7 @@
           bengaliLastParagraph.innerText = text;
           bengaliText.appendChild(bengaliLastParagraph);
           
-          // Auto cleanup old segments
+          // Auto cleanup old segments after a longer time
           setTimeout(() => {
             if (bengaliLastParagraph && bengaliLastParagraph.parentNode === bengaliText) {
               bengaliText.removeChild(bengaliLastParagraph);
@@ -376,33 +672,53 @@
         bengaliText.scrollTop = bengaliText.scrollHeight;
       }
 
-      // Setup Hindi speech recognition with Bengali translation
+      // Setup Hindi speech recognition with improved continuous listening
       function setupHindiRecognition() {
         if (!speechRecognitionSupported) return;
 
         hindiRecognition = new window.SpeechRecognition();
+        // Critical settings for continuous operation
         hindiRecognition.continuous = true;
-        hindiRecognition.interimResults = false;
+        hindiRecognition.interimResults = true; // Get interim results for more frequent feedback
         hindiRecognition.lang = 'hi-IN';
         hindiRecognition.maxAlternatives = 1;
+        
+        // For Android, greedier recognition might help
+        if (isAndroid) {
+          hindiRecognition.interimResults = true;
+        }
 
         hindiToggle.addEventListener('click', toggleHindiRecognition);
         
         hindiRecognition.onstart = function() {
           hindiListening = true;
-          updateStatus(hindiStatus, hindiStatusText, true, "শুনছে...");
+          hindiLastResultTime = Date.now(); // Reset timer when starting
+          updateStatus(hindiStatus, hindiStatusText, 'active', "শুনছে...");
           hindiToggle.innerText = 'বন্ধ করুন';
+          hindiHeartbeat.style.display = 'block';
+          console.log("Hindi recognition started");
         };
 
         hindiRecognition.onend = function() {
+          console.log("Hindi recognition ended naturally");
+          hindiHeartbeat.style.display = 'none';
+          
           if (hindiListening) {
-            // Try to restart if auto-stopped and still in listening mode
-            try {
-              hindiRecognition.start();
-            } catch (e) {
-              console.error("Could not restart Hindi recognition:", e);
+            // If we still want to be listening, try to restart
+            if (hindiRestartAttempts < maxRestartAttempts) {
+              console.log("Attempting to auto-restart Hindi recognition");
+              try {
+                hindiRecognition.start();
+                hindiLastResultTime = Date.now();
+                console.log("Hindi recognition auto-restarted successfully");
+              } catch (e) {
+                console.error("Auto-restart failed, trying full restart:", e);
+                restartHindiRecognition();
+              }
+            } else {
+              // Too many restart attempts, require manual intervention
+              updateStatus(hindiStatus, hindiStatusText, 'warning', "পুনরায় শুরু করতে ক্লিক করুন");
               hindiListening = false;
-              updateStatus(hindiStatus, hindiStatusText, false, "বন্ধ হয়ে গেছে - পুনরায় চেষ্টা করুন");
               hindiToggle.innerText = 'শুরু করুন';
             }
           } else {
@@ -412,30 +728,86 @@
         };
 
         hindiRecognition.onresult = function(event) {
+          hindiLastResultTime = Date.now(); // Update the last result time
+          
           if (!event.results || event.results.length === 0) return;
           
-          const last = event.results.length - 1;
-          const transcript = event.results[last][0].transcript.trim();
-          if (transcript) {
-            translateHindiToBengali(transcript);
+          // Get the latest result - for continuous speech recognition
+          const results = event.results;
+          let finalTranscript = '';
+          let interimTranscript = '';
+          
+          // Process all results in this event
+          for (let i = event.resultIndex; i < results.length; i++) {
+            const transcript = results[i][0].transcript.trim();
+            if (results[i].isFinal) {
+              finalTranscript += transcript + ' ';
+            } else {
+              interimTranscript += transcript;
+            }
+          }
+          
+          // Translate any final transcript segments
+          if (finalTranscript) {
+            translateHindiToBengali(finalTranscript);
+          }
+          
+          // Optionally update an interim display (for a smoother experience)
+          // This could show gray text that gets replaced with final translations
+          if (interimTranscript) {
+            // You could show this in a separate element if desired
+            // updateInterimTranslationDisplay(interimTranscript);
           }
         };
 
         hindiRecognition.onerror = function(event) {
           console.error("Hindi recognition error:", event.error);
+          hindiHeartbeat.style.display = 'none';
           
           // Handle specific errors
-          if (event.error === 'not-allowed') {
+          if (event.error === 'no-speech') {
+            // This is normal, just restart
+            console.log("No speech detected, continuing to listen");
+            // Don't update UI for this common error
+          } else if (event.error === 'audio-capture') {
+            updateStatus(hindiStatus, hindiStatusText, 'warning', "মাইক্রোফোন সমস্যা");
+            restartHindiRecognition();
+          } else if (event.error === 'not-allowed') {
             updateStatus(hindiStatus, hindiStatusText, false, "অনুমতি দেওয়া হয়নি - মাইক্রোফোন অ্যাক্সেস দিন");
+            hindiListening = false;
+            hindiToggle.innerText = 'শুরু করুন';
           } else if (event.error === 'network') {
-            updateStatus(hindiStatus, hindiStatusText, false, "নেটওয়ার্ক সমস্যা - ইন্টারনেট সংযোগ পরীক্ষা করুন");
+            updateStatus(hindiStatus, hindiStatusText, 'warning', "নেটওয়ার্ক সমস্যা - পুনরায় চেষ্টা করছে");
+            restartHindiRecognition();
+          } else if (event.error === 'aborted') {
+            // This is normal during restarts
+            console.log("Recognition aborted, likely during restart");
           } else {
-            updateStatus(hindiStatus, hindiStatusText, false, "ত্রুটি হয়েছে - পুনরায় চেষ্টা করুন");
+            updateStatus(hindiStatus, hindiStatusText, 'warning', "ত্রুটি হয়েছে - পুনরায় চেষ্টা করছে");
+            restartHindiRecognition();
           }
-          
-          // Reset state
-          hindiListening = false;
-          hindiToggle.innerText = 'শুরু করুন';
+        };
+        
+        // Add audioend handler to detect when audio input has stopped
+        hindiRecognition.onaudioend = function() {
+          console.log("Hindi audio input ended");
+          // If we're still supposed to be listening, ensure it restarts
+          if (hindiListening) {
+            // Rather than immediately restarting, mark this time for our health check
+            hindiLastResultTime = Date.now() - 15000; // Set it 15s ago to trigger health check soon
+          }
+        };
+        
+        // Add nomatch handler
+        hindiRecognition.onnomatch = function() {
+          console.log("No match found for Hindi speech");
+          // This is normal, just continue listening
+        };
+        
+        // Add a soundstart handler to provide feedback
+        hindiRecognition.onsoundstart = function() {
+          console.log("Hindi sound detected");
+          // Optionally update UI to show sound is being detected
         };
       }
 
@@ -443,22 +815,41 @@
         if (!hindiRecognition) return;
 
         if (!hindiListening) {
+          // Reset restart attempts when manually starting
+          hindiRestartAttempts = 0;
+          
           try {
             hindiRecognition.start();
+            updateStatus(hindiStatus, hindiStatusText, 'active', "শুরু করছে...");
           } catch (e) {
             console.error("Could not start Hindi recognition:", e);
             alert("স্পিচ রেকগনিশন শুরু করতে সমস্যা হয়েছে। পৃষ্ঠাটি রিফ্রেশ করুন বা অন্য ব্রাউজার ব্যবহার করুন।");
+            updateStatus(hindiStatus, hindiStatusText, false, "শুরু করতে ব্যর্থ");
           }
         } else {
-          hindiRecognition.stop();
-          hindiListening = false;
+          try {
+            hindiRecognition.stop();
+            hindiListening = false;
+            hindiHeartbeat.style.display = 'none';
+            updateStatus(hindiStatus, hindiStatusText, false, "শোনার জন্য প্রস্তুত");
+            hindiToggle.innerText = 'শুরু করুন';
+          } catch (e) {
+            console.error("Could not stop Hindi recognition:", e);
+            // Try to recover by restarting
+            restartHindiRecognition(true);
+          }
         }
       }
 
-      // Translate Hindi text to Bengali and display
+      // Translate Hindi text to Bengali with improved error handling
       function translateHindiToBengali(text) {
+        if (!text || text.trim() === '') return;
+        
+        // Update the activity timestamp (to show we're still working)
+        hindiLastResultTime = Date.now();
+        
         // Update UI to show translation is happening
-        updateStatus(hindiStatus, hindiStatusText, true, "অনুবাদ করছে...");
+        updateStatus(hindiStatus, hindiStatusText, 'active', "অনুবাদ করছে...");
         
         // Multiple translation APIs for better reliability
         // Try Google Translate API first
@@ -466,7 +857,9 @@
           .then(result => {
             if (result) {
               addHindiSegment(result);
-              updateStatus(hindiStatus, hindiStatusText, true, "শুনছে...");
+              if (hindiListening) {
+                updateStatus(hindiStatus, hindiStatusText, 'active', "শুনছে...");
+              }
             } else {
               // If Google Translate fails, try LibreTranslate fallback
               return tryLibreTranslate(text);
@@ -475,20 +868,34 @@
           .then(result => {
             if (result) {
               addHindiSegment(result);
-              updateStatus(hindiStatus, hindiStatusText, true, "শুনছে...");
+              if (hindiListening) {
+                updateStatus(hindiStatus, hindiStatusText, 'active', "শুনছে...");
+              }
             }
           })
           .catch(error => {
             console.error("Translation error:", error);
             // If translation fails, show the original Hindi text with a note
             addHindiSegment("[অনুবাদ সমস্যা] " + text);
-            updateStatus(hindiStatus, hindiStatusText, true, "শুনছে (অনুবাদে সমস্যা)");
+            if (hindiListening) {
+              updateStatus(hindiStatus, hindiStatusText, 'warning', "শুনছে (অনুবাদে সমস্যা)");
+            }
           });
       }
 
-      // Try Google Translate API
+      // Try Google Translate API with improved reliability
       function tryGoogleTranslate(text) {
         return new Promise((resolve, reject) => {
+          // We'll use localStorage to cache translations for better performance and fallback
+          const cacheKey = 'translate_hi_bn_' + text.substring(0, 100); // Limit key size
+          const cachedResult = localStorage.getItem(cacheKey);
+          
+          // Use cached version if available (improves responsiveness and works offline)
+          if (cachedResult) {
+            console.log("Using cached translation");
+            return resolve(cachedResult);
+          }
+          
           axios.get('https://translate.googleapis.com/translate_a/single', {
             params: {
               client: 'gtx',
@@ -501,7 +908,14 @@
           })
           .then(response => {
             if (response.data && response.data[0] && response.data[0][0]) {
-              resolve(response.data[0][0][0]);
+              const translated = response.data[0][0][0];
+              // Cache the result for future use
+              try {
+                localStorage.setItem(cacheKey, translated);
+              } catch (e) {
+                console.warn("Could not cache translation:", e);
+              }
+              resolve(translated);
             } else {
               resolve(null);
             }
@@ -516,9 +930,9 @@
       // Try LibreTranslate API as fallback (if you have a LibreTranslate instance)
       function tryLibreTranslate(text) {
         return new Promise((resolve, reject) => {
-          // Fallback: If you don't have a LibreTranslate instance,
-          // you can just return the original text
-          resolve("[हिंदी] " + text);
+          // Simple fallback - just mark that it's Hindi and return the text
+          // This ensures the user still sees the Hindi text if translation fails
+          resolve("[হিন্দি] " + text);
           
           // If you have a LibreTranslate instance, use this:
           /*
@@ -534,20 +948,25 @@
             if (response.data && response.data.translatedText) {
               resolve(response.data.translatedText);
             } else {
-              resolve("[हिंदी] " + text);
+              resolve("[হিন্দি] " + text);
             }
           })
           .catch(error => {
             console.warn("LibreTranslate error:", error);
-            resolve("[हिंदी] " + text);
+            resolve("[হিন্দি] " + text);
           });
           */
         });
       }
 
-      // Add translated Hindi-to-Bengali text to display
+      // Add translated Hindi-to-Bengali text to display with improved handling
       function addHindiSegment(text) {
+        if (!text || text.trim() === '') return;
+        
         const now = Date.now();
+        
+        // Update the activity timestamp
+        hindiLastResultTime = now;
         
         if (hindiLastParagraph && (now - hindiLastSegmentTime < pauseThreshold)) {
           hindiLastParagraph.innerText += " " + text;
@@ -557,7 +976,7 @@
           hindiLastParagraph.innerText = text;
           hindiText.appendChild(hindiLastParagraph);
           
-          // Auto cleanup old segments
+          // Auto cleanup old segments after a longer time
           setTimeout(() => {
             if (hindiLastParagraph && hindiLastParagraph.parentNode === hindiText) {
               hindiText.removeChild(hindiLastParagraph);
@@ -573,15 +992,22 @@
         hindiText.scrollTop = hindiText.scrollHeight;
       }
 
-      // Update status indicators
-      function updateStatus(dotElement, textElement, isActive, statusText) {
-        if (isActive) {
-          dotElement.classList.remove('inactive');
+      // Update status indicators with improved states
+      function updateStatus(dotElement, textElement, state, statusText) {
+        // Remove all current state classes
+        dotElement.classList.remove('inactive');
+        dotElement.classList.remove('active');
+        dotElement.classList.remove('warning');
+        
+        // Add the appropriate class based on state
+        if (state === 'active') {
           dotElement.classList.add('active');
+        } else if (state === 'warning') {
+          dotElement.classList.add('warning');
         } else {
-          dotElement.classList.remove('active');
           dotElement.classList.add('inactive');
         }
+        
         textElement.innerText = statusText;
       }
 
@@ -594,11 +1020,14 @@
           <h3>স্পিচ রেকগনিশন সমর্থিত নয়</h3>
           <p>আপনার ব্রাউজারটি স্পিচ রেকগনিশন সমর্থন করে না। Chrome, Edge, বা Firefox-এর সাম্প্রতিকতম সংস্করণ ব্যবহার করুন।</p>
           <p>iOS এ, Safari ব্রাউজারে স্পিচ রেকগনিশন সীমিত হতে পারে।</p>
+          <p>যদি আপনি মোবাইল ডিভাইস ব্যবহার করেন, আপনার কীবোর্ডের মাইক্রোফোন কী ব্যবহার করে সরাসরি টাইপ করা চেষ্টা করুন।</p>
         `;
 
         // Disable buttons
         bengaliToggle.disabled = true;
+        bengaliRestart.disabled = true;
         hindiToggle.disabled = true;
+        hindiRestart.disabled = true;
         
         // Show error message
         bengaliText.innerHTML = '';
@@ -612,20 +1041,50 @@
         updateStatus(hindiStatus, hindiStatusText, false, "সমর্থিত নয়");
       }
 
-      // Detect and handle page visibility changes to conserve battery
+      // Detect and handle page visibility changes for better battery life
       document.addEventListener('visibilitychange', function() {
         if (document.hidden) {
           // Page is hidden, pause recognition to save battery
           if (bengaliListening && bengaliRecognition) {
-            bengaliRecognition.stop();
-            bengaliListening = false;
+            try {
+              console.log("Page hidden, pausing Bengali recognition");
+              bengaliRecognition.stop();
+              // But keep bengaliListening = true so we can resume
+            } catch (e) {
+              console.warn("Error pausing Bengali recognition:", e);
+            }
           }
           if (hindiListening && hindiRecognition) {
-            hindiRecognition.stop();
-            hindiListening = false;
+            try {
+              console.log("Page hidden, pausing Hindi recognition");
+              hindiRecognition.stop();
+              // But keep hindiListening = true so we can resume
+            } catch (e) {
+              console.warn("Error pausing Hindi recognition:", e);
+            }
           }
         } else {
-          // Page is visible again, don't automatically restart to respect user choice
+          // Page is visible again, resume if we were listening before
+          if (bengaliListening) {
+            try {
+              console.log("Page visible, resuming Bengali recognition");
+              bengaliRecognition.start();
+            } catch (e) {
+              console.error("Error resuming Bengali recognition:", e);
+              // Try a complete restart
+              restartBengaliRecognition();
+            }
+          }
+          if (hindiListening) {
+            try {
+              console.log("Page visible, resuming Hindi recognition");
+              hindiRecognition.start();
+            } catch (e) {
+              console.error("Error resuming Hindi recognition:", e);
+              // Try a complete restart
+              restartHindiRecognition();
+            }
+          }
         }
       });
 
@@ -634,10 +1093,16 @@
         let wakeLock = null;
         
         async function requestWakeLock() {
+          if (wakeLock) {
+            // Already have a wake lock
+            return;
+          }
+          
           try {
             wakeLock = await navigator.wakeLock.request('screen');
             wakeLock.addEventListener('release', () => {
               console.log('Wake Lock released');
+              wakeLock = null;
             });
             console.log('Wake Lock acquired');
           } catch (error) {
@@ -654,11 +1119,24 @@
           if (hindiListening) requestWakeLock();
         });
         
-        // Release wake lock when page is hidden
+        // Release wake lock when both recognitions are inactive
+        function checkAndReleaseWakeLock() {
+          if (!bengaliListening && !hindiListening && wakeLock) {
+            wakeLock.release().then(() => {
+              wakeLock = null;
+            }).catch(e => {
+              console.warn("Error releasing wake lock:", e);
+            });
+          }
+        }
+        
+        // Also handle visibility changes
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'hidden' && wakeLock) {
             wakeLock.release().then(() => {
               wakeLock = null;
+            }).catch(e => {
+              console.warn("Error releasing wake lock on visibility change:", e);
             });
           } else if (document.visibilityState === 'visible' && 
                      (bengaliListening || hindiListening)) {
@@ -682,10 +1160,28 @@
             source.connect(audioContext.destination);
             
             // Use user interaction to start audio
-            document.body.addEventListener('touchstart', function initAudio() {
+            const initAudio = function() {
               source.start(0);
               document.body.removeEventListener('touchstart', initAudio);
-            }, false);
+              document.body.removeEventListener('click', initAudio);
+              
+              // Also prompt for microphone permission explicitly on iOS
+              if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                  .then(function(stream) {
+                    console.log("Microphone access granted on iOS");
+                    // Stop the stream immediately - we just needed permission
+                    const tracks = stream.getTracks();
+                    tracks.forEach(track => track.stop());
+                  })
+                  .catch(function(err) {
+                    console.error("Error accessing microphone on iOS:", err);
+                  });
+              }
+            };
+            
+            document.body.addEventListener('touchstart', initAudio, { once: true });
+            document.body.addEventListener('click', initAudio, { once: true });
           } catch (e) {
             console.warn("Could not initialize iOS audio:", e);
           }
@@ -694,6 +1190,17 @@
 
       // Call iOS audio initialization
       initIOSAudio();
+      
+      // Auto-start after a delay if the page is already visible
+      // This makes the app more convenient for users
+      if (!isIOS) { // Skip auto-start on iOS as it might cause issues
+        setTimeout(() => {
+          if (!document.hidden && speechRecognitionSupported) {
+            console.log("Auto-starting Bengali recognition");
+            bengaliToggle.click();
+          }
+        }, 1000);
+      }
     });
   </script>
 </body>
