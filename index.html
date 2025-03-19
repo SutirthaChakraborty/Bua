@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>বাংলা, হিন্দি ও ইংরেজি থেকে বাংলা</title>
+  <title>Talk with Bua</title>
   <!-- Axios for translation requests -->
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <style>
@@ -71,13 +71,6 @@
     <h2>হিন্দি থেকে বাংলা অনুবাদ</h2>
     <button id="toggleHindi">শুরু করুন</button>
     <div class="displayArea" id="hindiText"></div>
-  </div>
-
-  <!-- English-to-Bengali Translation Section -->
-  <div class="section" id="englishSection">
-    <h2>ইংরেজি থেকে বাংলা অনুবাদ</h2>
-    <button id="toggleEnglish">শুরু করুন</button>
-    <div class="displayArea" id="englishText"></div>
   </div>
 
   <script>
@@ -220,84 +213,6 @@
         }, 60000);
       }
       hindiLastSegmentTime = now;
-      container.scrollTop = container.scrollHeight;
-    }
-
-    // --------------------------
-    // English-to-Bengali Translation Setup
-    // --------------------------
-    const englishRecognition = new window.SpeechRecognition();
-    englishRecognition.continuous = true;
-    englishRecognition.interimResults = false;
-    englishRecognition.lang = 'en-US';
-
-    let englishListening = false;
-    let englishLastSegmentTime = 0;
-    let englishLastParagraph = null;
-
-    document.getElementById('toggleEnglish').addEventListener('click', () => {
-      if (!englishListening) {
-        englishRecognition.start();
-        englishListening = true;
-        document.getElementById('toggleEnglish').innerText = 'বন্ধ করুন';
-      } else {
-        englishRecognition.stop();
-        englishListening = false;
-        document.getElementById('toggleEnglish').innerText = 'শুরু করুন';
-      }
-    });
-
-    englishRecognition.onresult = (event) => {
-      const last = event.results.length - 1;
-      const transcript = event.results[last][0].transcript.trim();
-      // Translate the English transcript to Bengali
-      translateEnglishToBengali(transcript);
-    };
-
-    englishRecognition.onerror = (event) => {
-      console.error("English recognition error:", event.error);
-    };
-
-    function translateEnglishToBengali(text) {
-      axios.get('https://translate.googleapis.com/translate_a/single', {
-        params: {
-          client: 'gtx',
-          sl: 'en',
-          tl: 'bn',
-          dt: 't',
-          q: text
-        }
-      })
-      .then(response => {
-        if (response.data && response.data[0] && response.data[0][0]) {
-          const translated = response.data[0][0][0];
-          addEnglishSegment(translated);
-        }
-      })
-      .catch(error => {
-        console.error("Translation error:", error);
-      });
-    }
-
-    function addEnglishSegment(text) {
-      const now = Date.now();
-      const container = document.getElementById('englishText');
-
-      if (englishLastParagraph && (now - englishLastSegmentTime < pauseThreshold)) {
-        englishLastParagraph.innerText += " " + text;
-      } else {
-        englishLastParagraph = document.createElement("p");
-        englishLastParagraph.className = "segment";
-        englishLastParagraph.innerText = text;
-        container.appendChild(englishLastParagraph);
-        // Remove this segment after 1 minute
-        setTimeout(() => {
-          if (englishLastParagraph.parentNode === container) {
-            container.removeChild(englishLastParagraph);
-          }
-        }, 60000);
-      }
-      englishLastSegmentTime = now;
       container.scrollTop = container.scrollHeight;
     }
   </script>
